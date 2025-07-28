@@ -2307,17 +2307,16 @@ class IAT(nn.Module):
     def areas_exposure_loss(
             self,
             L,
-            base_dark=0.15,  # ✅ 可适当增大，如 0.15 或 0.2，提高暗区亮度，增强对比
             base_mid=0.75,
             base_bright=0.7,  # ✅ 可适当减小，如 0.7 或 0.6，降低亮区亮度，防止过曝
-            dark_threshold=0.3,
+    
             bright_threshold=0.6,  # ✅ 可减小，如 0.7，使更多区域划为亮区，参与抑制
-            dark_target_ref=0.3,
+        
             bright_ratio_threshold=0.05,
             target_adjust_coeff=0.3,  # ✅ 可增大如 0.3，增强曝光目标的动态性，防止泛白
-            max_dark_weight=0.15,  # ✅ 可适当减小如 0.15，避免暗区主导loss
+           
             max_bright_weight=0.1,  # ✅ 可适当减小如 0.1，降低亮区过曝风险
-            dark_loss_weight=2.0,
+            
             bright_loss_weight=3.0  # ✅ 可增大如 3.0，加强亮区损失惩罚，抑制过亮
     ):
         # L = rout.mean(dim=1, keepdim=True)  # 灰度图
@@ -2346,49 +2345,48 @@ class IAT(nn.Module):
 
         def brightness_regions(L):
             """根据亮度阈值划分区域"""
-            dark_region = (L < dark_threshold)
+            mid_region = (L <= bright_threshold)
             bright_region = (L > bright_threshold)
-            mid_region = ~( dark_region | bright_region)
-            return dark_region, mid_region, bright_region
 
-        dark_region, mid_region, bright_region = brightness_regions(L)
+            return  mid_region, bright_region
+
+        mid_region, bright_region = brightness_regions(L)
 
         eps = 1e-6
-        total = dark_region.sum() + mid_region.sum() + bright_region.sum() + eps
+        total =  mid_region.sum() + bright_region.sum() + eps
 
         # 区域比例
-        r_dark = dark_region.sum().float() / total
+      
         r_mid = mid_region.sum().float() / total
+
         r_bright = bright_region.sum().float() / total
 
         # 动态曝光目标
-        target_dark = base_dark + target_adjust_coeff * (dark_target_ref - r_dark).clamp(min=0)
+     
         target_mid = base_mid
         target_bright = base_bright - target_adjust_coeff * (r_bright - bright_ratio_threshold).clamp(min=0)
 
         # 区域亮度均值
-        dark_mean = L[dark_region].mean() if dark_region.any() else 0
+       
         mid_mean = L[mid_region].mean() if mid_region.any() else 0
         bright_mean = L[bright_region].mean() if bright_region.any() else 0
 
         # 区域权重
-        w_dark = r_dark.clamp(max=max_dark_weight)
+       
         w_mid = r_mid
         w_bright = r_bright.clamp(max=max_bright_weight)
 
-        weight_sum = w_dark + w_mid + w_bright + eps
-        w_dark /= weight_sum
+        weight_sum =  w_mid + w_bright + eps
+   
         w_mid /= weight_sum
         w_bright /= weight_sum
 
         # 加权损失
         loss = (
-                dark_loss_weight * w_dark * (dark_mean - target_dark) ** 2 +
                 w_mid * (mid_mean - target_mid) ** 2 +
                 bright_loss_weight * w_bright * (bright_mean - target_bright) ** 2
         )
-        print(f"mean dark: {dark_mean:.3f}, mid: {mid_mean:.3f}, bright: {bright_mean:.3f}")
-        print(f"ratio dark: {r_dark:.3f}, mid: {r_mid:.3f}, bright: {r_bright:.3f}")
+       
         return loss
 
     def dark_region_constraint(self,I_hat,L ,max_dark_value=0.3):
@@ -2539,7 +2537,7 @@ class APBSN(nn.Module):
     Asymmetric PD Blind-Spot Network (AP-BSN)
     '''
 
-    def __init__(self, pd_a=5, pd_b=2, pd_pad=0, R3=False, R3_T=8, R3_p=0.16,
+    def __init__(self, pd_a=5, pd_b=2, pd_pad=0, R3=True, R3_T=8, R3_p=0.6,
                  bsn='DBSNl', in_ch=3, bsn_base_ch=128, bsn_num_module=9
                  ):
         '''
@@ -3247,7 +3245,7 @@ class R2RNet(nn.Module):  # 总的
         print('ssim2=', ssim2_value / len(test_low_data_names))
         print('psnr2=', psnr2_value / len(test_low_data_names))
         print('lpips2=', lpips2_value / len(test_low_data_names))
-
+        #
         # ssim2_value = ssim2(im2, eval_high_img)
         # psnr2_value = psnr2(im_test2, eval_high_img)
         # lpips2_value = lpips2(im_test2, eval_high_img)
