@@ -1,4 +1,4 @@
-The outputs are updated in output/readme.txt/n
+The outputs are updated in output/readme.txt
 
 
 
